@@ -9,20 +9,44 @@
     <SignAssembly>False</SignAssembly> 
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <PackageId>NModbus.Extensions</PackageId>
-    <Authors>xiapeng</Authors>
+    <Authors>xiapeng, 云母工艺(Mica App)</Authors>
     <Description>为 NModbus 提供的扩展方法和工具库</Description>
     <PackageTags>nmodbus;modbus;extensions;serial</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Title>NModbus.Extensions</Title>
-    <Company>云母工艺(Mica App)</Company>
+    <Company>云母工艺(Mica Apps)</Company>
     <Copyright>Copyright (c) 2026 Mica App</Copyright>
+
+    <!-- NuGet 包元数据：仓库链接（来自 git remote）与主页 -->
+    <PackageProjectUrl>https://github.com/xiapeng01/NModbus.Extensions</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/xiapeng01/NModbus.Extensions.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- 把 README 打进包，nuget.org 包详情页会渲染它（含组织链接） -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>Logo.png</PackageIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="NModbus" Version="3.0.83" />
     <PackageReference Include="NModbus.Serial" Version="3.0.83" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Logo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
   <!-- 外部 nuspec 不再用于打包；若保留作为参考，可移回项目目录但不参与打包 -->
 
