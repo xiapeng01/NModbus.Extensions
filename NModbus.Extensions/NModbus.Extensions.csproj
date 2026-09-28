@@ -9,15 +9,15 @@
     <SignAssembly>False</SignAssembly> 
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 
-    <Version>0.9.0</Version>
+    <Version>0.1.0</Version>
     <PackageId>NModbus.Extensions</PackageId>
     <Authors>xiapeng</Authors>
-    <Description>为 NModbus 提供的扩展方法和工具库（基于项目文件自动生成）。</Description>
+    <Description>为 NModbus 提供的扩展方法和工具库</Description>
     <PackageTags>nmodbus;modbus;extensions;serial</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Title>NModbus.Extensions</Title>
-    <Company>Mica App</Company>
-    <Copyright>Mit</Copyright>
+    <Company>云母工艺(Mica App)</Company>
+    <Copyright>Copyright (c) 2026 Mica App</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

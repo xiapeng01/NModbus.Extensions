@@ -1,0 +1,41 @@
+name: NuGet Package
+ 
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+ 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+ 
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: CD_Dir
+      run: cd NModbus.Extensions
+ 
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 8.x.x
+ 
+    - name: Restore dependencies
+      run: dotnet restore
+ 
+    - name: Build
+      run: dotnet build --configuration Release /p:EnableWindowsTargeting=true  --no-restore 
+ 
+    - name: Test
+      run: dotnet test --no-restore --verbosity normal
+ 
+    - name: Pack
+      run:  dotnet pack NModbus.Extensions/NModbus.Extensions.csproj --configuration Release --output dist --no-build --no-restore
+
+    # 需在github库中设置${{ secrets.NUGET_API_KEY }}
+    - name: Publish NuGet package
+      run: dotnet nuget push **/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+    - name: Show Dir
+      run: tree
