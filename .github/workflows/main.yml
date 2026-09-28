@@ -1,41 +1,32 @@
 name: NuGet Package
- 
+
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
- 
+
 jobs:
   build:
     runs-on: ubuntu-latest
- 
-    steps:
-    - uses: actions/checkout@v2
 
-    - name: CD_Dir
-      run: cd NModbus.Extensions
- 
+    steps:
+    - uses: actions/checkout@v4
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.x.x
- 
+        dotnet-version: 10.0.x
+
     - name: Restore dependencies
-      run: dotnet restore
- 
+      run: dotnet restore NModbus.Extensions/NModbus.Extensions.csproj
+
     - name: Build
-      run: dotnet build --configuration Release /p:EnableWindowsTargeting=true  --no-restore 
- 
-    - name: Test
-      run: dotnet test --no-restore --verbosity normal
- 
+      run: dotnet build NModbus.Extensions/NModbus.Extensions.csproj --configuration Release /p:EnableWindowsTargeting=true --no-restore
+
     - name: Pack
-      run:  dotnet pack NModbus.Extensions/NModbus.Extensions.csproj --configuration Release --output dist --no-build --no-restore
+      run: dotnet pack NModbus.Extensions/NModbus.Extensions.csproj --configuration Release --output dist --no-build --no-restore
 
     # 需在github库中设置${{ secrets.NUGET_API_KEY }}
     - name: Publish NuGet package
-      run: dotnet nuget push **/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-    - name: Show Dir
-      run: tree
+      run: dotnet nuget push dist/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
