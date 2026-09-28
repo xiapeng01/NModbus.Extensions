@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="NModbus.Extensions.Demo/NModbus.Extensions.Demo.csproj" Id="bd8e02cb-2baa-487d-be82-3d224a0f4855" />
+  <Project Path="NModbus.Extensions/NModbus.Extensions.csproj" />
+</Solution>
