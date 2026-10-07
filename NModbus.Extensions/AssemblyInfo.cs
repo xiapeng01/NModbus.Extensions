@@ -13,4 +13,6 @@ using System.Runtime.InteropServices;
 // 如果此项目向 COM 公开，则下列 GUID 用于 typelib 的 ID。
 
 [assembly: Guid("ccea9f5f-7d53-4151-9943-720ec1c45cfe")]
-[assembly: AssemblyVersion("0.9.*")]
+
+// 程序集版本不再手写：由 SDK 依据 csproj 的 <Version> 自动生成，
+// 保证 AssemblyVersion/AssemblyFileVersion 与 NuGet 包版本一致（修复8）

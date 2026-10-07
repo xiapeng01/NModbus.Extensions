@@ -2,14 +2,17 @@
 
   <PropertyGroup>
     <TargetFrameworks>net5.0;net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <Deterministic>false</Deterministic>
+    <!-- 开启 SDK 程序集信息生成：AssemblyVersion/AssemblyFileVersion 自动取自 <Version>，与包版本保持一致（修复8）；
+         同时恢复确定性构建（原 Deterministic=false 是为手写 AssemblyVersion("0.9.*") 通配符而设，现已不需要） -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Nullable>enable</Nullable>
     <LangVersion>10.0</LangVersion>
+    <!-- 生成 XML 文档文件（随 NuGet 包一起发布，消费方可获得 IntelliSense 提示） -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <SignAssembly>False</SignAssembly> 
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <PackageId>NModbus.Extensions</PackageId>
     <Authors>xiapeng, 云母工艺(Mica App)</Authors>
     <Description>为 NModbus 提供的扩展方法和工具库</Description>
@@ -27,6 +30,10 @@
     <!-- 把 README 打进包，nuget.org 包详情页会渲染它（含组织链接） -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>Logo.png</PackageIcon>
+
+    <!-- 许可证元数据（SPDX 表达式），消除 push 时的 License missing 警告 -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <AssemblyOriginatorKeyFile>D:\MyKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>

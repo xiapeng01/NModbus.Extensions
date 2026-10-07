@@ -24,9 +24,16 @@ jobs:
     - name: Build
       run: dotnet build NModbus.Extensions/NModbus.Extensions.csproj --configuration Release /p:EnableWindowsTargeting=true --no-restore
 
+    # 字节序往返回归测试：不依赖外部库，进程内 TCP 主从对，PR 与 push 都必须通过
+    - name: Test
+      run: dotnet test NModbus.Extensions.Tests/NModbus.Extensions.Tests.csproj --configuration Release /p:EnableWindowsTargeting=true --nologo
+
     - name: Pack
       run: dotnet pack NModbus.Extensions/NModbus.Extensions.csproj --configuration Release --output dist --no-build --no-restore
 
+    # 仅 push 到 master 才发布；PR 只构建+测试，避免未评审代码直接发到 NuGet.org
+    # （同仓库分支的 PR 也能读到 secrets，故必须显式限制事件类型）
     # 需在github库中设置${{ secrets.NUGET_API_KEY }}
     - name: Publish NuGet package
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       run: dotnet nuget push dist/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

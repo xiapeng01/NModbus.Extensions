@@ -1,54 +1,103 @@
 ﻿using Dumpify;
+using Microsoft.VisualBasic;
 using System;
 
 namespace NModbus.Extensions.Demo
 {
     class Program
-    {
-        static void Main(string[] args)
+    { 
+        private static void Main(string[] args)
         {
-            try
-            {
-                //创建Modbus从站
-                var ser = Tools.CreateTcpClientNetwork(502);//ip默认为127.0.0.1,可改端口号                
-                var slave = ser.CreateSlave(1);//配置从站站号1
+            var nw = Tools.CreateTcpSlaveNetwork(600);
+            var slave = nw.CreateSlave(1);
 
-                //创建主站
-                var mb = Tools.CreateTcpMaster("127.0.0.1", 502);
-                //mb.SetEndian(EnumEndian.CDAB);//这一步可以不做,默认就是CDAB的,和HslCommunication兼容,也可以切换其它字节序
+            var mb = Tools.CreateTcpMaster("127.0.0.1", 600);
 
-                //bool
-                mb.WriteBoolRW(1, 100, new bool[] { true, false, true, false, true });
-                mb.ReadBoolRW(1, 100, 5).Dump("Bool");
+            //CDAB
+            Console.WriteLine("----------------------CDAB--------------------------");
+            mb.SetEndian(EnumEndian.CDAB);
+            Foo(mb);//读写单个
+            Foo2(mb);//读写多个
 
-                //int16
-                mb.WriteInt16RW(1, 100, new short[] { -1, -2, -3, -4, -5 });
-                mb.ReadInt16RW(1, 100, 5).Dump("Int16");
+            //DCBA
+            Console.WriteLine("----------------------DCBA--------------------------");
+            mb.SetEndian(EnumEndian.DCBA);
+            Foo(mb);//读写单个
+            Foo2(mb);//读写多个
 
-                //Uint16
-                mb.WriteUInt16RW(1, 100, new ushort[] { 1, 2, 3, 4, 5 });
-                mb.ReadUInt16RW(1, 100, 5).Dump("UInt16");
+            ////ABCD
+            Console.WriteLine("----------------------ABCD--------------------------");
+            mb.SetEndian(EnumEndian.ABCD);
+            Foo(mb);//读写单个
+            Foo2(mb);//读写多个
 
-                //int32
-                mb.WriteInt32RW(1, 100, new int[] { -10, -20, -30, -40, -50 });
-                mb.ReadInt32RW(1, 100, 5).Dump("Int32");
+            ////BADC
+            Console.WriteLine("----------------------BADC--------------------------");
+            mb.SetEndian(EnumEndian.BADC);
+            Foo( mb);//读写单个
+            Foo2( mb);//读写多个
 
-                //Uint32
-                mb.WriteUInt32RW(1, 100, new uint[] { 10, 20, 30, 40, 50 });
-                mb.ReadUInt32RW(1, 100, 5).Dump("UInt32");
+        }
 
-                //float
-                mb.WriteFloatRW(1, 100, new float[] { -1.1f, -2.2f, -3.3f, -4.4f, -5.5f });
-                mb.ReadFloatRW(1, 100, 5).Dump("Float");
+        static void Foo(IModbusMaster mb)
+        {
+            //bool值
+            mb.WriteBoolRW(1, 0, true);//用Nmodbus.Extensions写入
+            mb.ReadBoolRW(1, 0).Dump("NModbus.Extensions.bool");//用Nmodbus.Extensions读取
 
-                //string
-                mb.WriteStringRW(1, 100, "ABCDE");
-                mb.ReadStringRW(1, 100, 5).Dump("String");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
+            //Int16
+            mb.WriteInt16RW(1, 0, -12345);
+            mb.ReadInt16RW(1, 0).Dump("NModbus.Extensions.Int16");
+
+            //UInt16
+            mb.WriteUInt16RW(1, 0, 12345);
+            mb.ReadUInt16RW(1, 0).Dump("NModbus.Extensions.UInt16");
+
+            //Int32
+            mb.WriteInt32RW(1, 0, -123456789);
+            mb.ReadInt32RW(1, 0).Dump("NModbus.Extensions.Int32");
+
+            //UInt32
+            mb.WriteUInt32RW(1, 0, 123456789);
+            mb.ReadUInt32RW(1,0).Dump("NModbus.Extensions.UInt32");
+
+            //float
+            mb.WriteFloatRW(1, 0, -1.23456F);
+            mb.ReadFloatRW(1, 0).Dump("NModbus.Extensions.Float");
+
+            //string
+            mb.WriteStringRW(1, 0, "He");
+            mb.ReadStringRW(1, 0, 2).Dump("NModbus.Extensions.String");
+        }
+        static void Foo2(IModbusMaster mb)
+        {
+            //bool值
+            mb.WriteBoolRW(1, 0, new bool[] { true, false, true, false, true });//用Nmodbus.Extensions写入
+            mb.ReadBoolRW(1, 0, 5).Dump("NModbus.Extensions.bool");//用Nmodbus.Extensions读取
+
+            //Int16
+            mb.WriteInt16RW(1, 0, new short[] { -12345, -23456, -14567, -15678, -16789 });
+            mb.ReadInt16RW(1, 0, 5).Dump("NModbus.Extensions.Int16");
+
+            //UInt16
+            mb.WriteUInt16RW(1, 0, new ushort[] { 12345, 23456, 34567, 45678, 56789 });
+            mb.ReadUInt16RW(1, 0, 5).Dump("NModbus.Extensions.UInt16");
+
+            //Int32
+            mb.WriteInt32RW(1, 0, new int[] { -123456789, -234567890, -345678901, -456789012, -567890123 });
+            mb.ReadInt32RW(1, 0, 5).Dump("NModbus.Extensions.Int32");
+
+            //UInt32
+            mb.WriteUInt32RW(1, 0, new uint[] { 123456789, 234567890, 345678901, 456789012, 567890123 });
+            mb.ReadUInt32RW(1, 0, 5).Dump("NModbus.Extensions.UInt32");
+
+            //float
+            mb.WriteFloatRW(1, 0, new float[] { -1.23456F, -2.34567F, -3.45678F, -4.56789F, -5.67890F });
+            mb.ReadFloatRW(1, 0, 5).Dump("NModbus.Extensions.Float");
+
+            //string
+            mb.WriteStringRW(1, 0, "Hello World");
+            mb.ReadStringRW(1, 0, 11).Dump("NModbus.Extensions.String");
         }
     }
 }
