@@ -765,11 +765,10 @@ namespace NModbus.Extensions
         /// 字符串线上布局固定为每寄存器内交换高低字节（与主流 PLC/HslCommunication 一致），不受从站字节序设置影响。
         /// </summary>
         /// <param name="slave">从站对象。</param>
-        /// <param name="stationNo">保留参数，从站自身无需站号，可任意传值（为兼容旧签名保留）。</param>
         /// <param name="address">起始地址（0-65535）。</param>
         /// <param name="str">要写入的字符串。</param>
         /// <returns>写入成功返回 true；<paramref name="str"/> 为 null 或空串时不写入并返回 false。</returns>
-        public static bool WriteStringR(this IModbusSlave slave, int stationNo, int address, string str)
+        public static bool WriteStringR(this IModbusSlave slave, int address, string str)
         {
             var writeData = EncodeString(str);
             if (writeData.Length == 0) return false;//空串不发送，避免零长度请求
@@ -942,11 +941,10 @@ namespace NModbus.Extensions
         /// 字符串线上布局固定为每寄存器内交换高低字节，不受从站字节序设置影响。
         /// </summary>
         /// <param name="slave">从站对象。</param>
-        /// <param name="stationNo">保留参数，从站自身无需站号，可任意传值（为兼容旧签名保留）。</param>
         /// <param name="address">起始地址（0-65535）。</param>
         /// <param name="str">要写入的字符串。</param>
         /// <returns>写入成功返回 true；<paramref name="str"/> 为 null 或空串时不写入并返回 false。</returns>
-        public static bool WriteStringRW(this IModbusSlave slave, int stationNo, int address, string str)
+        public static bool WriteStringRW(this IModbusSlave slave, int address, string str)
         {
             var writeData = EncodeString(str);
             if (writeData.Length == 0) return false;//空串不发送，避免零长度请求

@@ -63,7 +63,8 @@ int v = mb.ReadInt32RW(1, 300);
 做从站（模拟设备）同样简单：
 
 ```csharp
-var ser = Tools.CreateTcpSlaveNetwork(502);    // 监听 127.0.0.1:502
+var ser = Tools.CreateTcpSlaveNetwork(502);          // 监听 0.0.0.0:502（本机所有网卡）
+// var ser = Tools.CreateTcpSlaveNetwork("127.0.0.1", 502); // 仅本机可访问
 var slave = ser.CreateSlave(1);                // 站号 1
 
 // 把数据"放进"设备，供主站读取
@@ -118,7 +119,7 @@ ushort   ReadUInt16RW(stationNo, address);        // 单个值简写
 ```csharp
 slave.WriteBoolR(0, new bool[] { true, false, true });
 slave.WriteUInt32RW(100, 4294967295);
-slave.WriteStringR(1, 200, "DEVICE-A");
+slave.WriteStringR(200, "DEVICE-A");
 ```
 
 ### 4. 类型转换工具
@@ -145,8 +146,9 @@ string str = NModbusExtensions.ToString(regs);    // 已过滤末尾 \0
 | `Tools.CreateTcpMaster(ip, port)` | 创建 Modbus TCP 主站 |
 | `Tools.CreateRtuMaster(portName, baud, ...)` | 创建 RTU 串口主站（默认 9600,8,N,1） |
 | `Tools.CreateRtuOverTcpMaster(ip, port)` | 创建 RTU over TCP 主站 |
-| `Tools.CreateTcpSlaveNetwork(port, onError?)` | 创建 TCP 从站网络（监听 127.0.0.1，后台异步运行） |
-| `Tools.CreateRtuSlaveNetwork(portName, onError?)` | 创建 RTU 串口从站网络（115200,8,N,1） |
+| `Tools.CreateTcpSlaveNetwork(port, onError?)` | 创建 TCP 从站网络（监听 `0.0.0.0` 即本机所有网卡，后台异步运行）；0.2.1 起默认地址由 `127.0.0.1` 改为 `0.0.0.0`，从站会暴露到局域网 |
+| `Tools.CreateTcpSlaveNetwork(ip, port, onError?)` | 0.2.1 新增：创建 TCP 从站网络并指定监听 IP（如 `"127.0.0.1"` 仅本机可访问） |
+| `Tools.CreateRtuSlaveNetwork(portName, baudRate?, dataBits?, parity?, stopBits?, onError?)` | 创建 RTU 串口从站网络（0.2.1 起串口参数可传，默认 115200,8,N,1） |
 | `Tools.CreateRtuOverTcpSlaveNetwork(port, onError?)` | 创建 RTU over TCP 从站网络 |
 | `network.CreateSlave(stationNo)` | 向从站网络添加指定站号的从站 |
 | `Tools.CreateRandom(n)` | 生成 n 个随机 `double`（调试用） |
@@ -176,14 +178,41 @@ NModbus.Extensions/
 ├── NModbus.Extensions/           # 类库（NuGet 包本体）
 │   ├── NModbusExtensions.cs      # 字节序、类型转换、主从站读写扩展方法
 │   └── Tools.cs                  # 主站/从站网络与连接创建工具
-├── NModbus.Extensions.Demo/      # 控制台示例（TCP 主从自发自收，四种字节序与 HslCommunication 互读对照）
+├── NModbus.Extensions.Demo/      # 控制台示例（TCP 主从自发自收，四种字节序往返读写）
+├── NModbus.Extensions.Tests/     # xUnit 测试：字节序往返一致性 + 参数校验回归
 ├── .github/workflows/main.yml    # CI：构建 + 打包 + 发布到 NuGet.org
 └── NModbus.Extensions.slnx       # 解决方案（需 .NET 9.0.2xx+ SDK 打开）
 ```
 
 ## 变更说明
 
-### 0.2.0（当前版本）
+### 0.2.1（当前版本，2026-10）
+
+**⚠️ 破坏性变更（两处，升级需改调用代码）**
+
+- **从站侧 `WriteStringR` / `WriteStringRW` 移除多余的 `stationNo` 参数**：从站自身不需要站号，旧签名 `WriteStringR(slave, stationNo, address, str)` 的首个参数极易被误当成地址，且是同类从站方法中唯一带站号的两个。现统一为 `WriteStringR(slave, address, str)`。
+  ```csharp
+  slave.WriteStringR(1, 200, "DEVICE-A");   // ❌ 0.2.1 起编译失败（无此重载）
+  slave.WriteStringR(200, "DEVICE-A");      // ✅
+  ```
+  主站侧 `WriteStringRW(mb, stationNo, address, str)` **不受影响**（主站确实需要站号）。
+- **`Tools.CreateTcpSlaveNetwork(port)` 默认监听地址由 `127.0.0.1` 改为 `0.0.0.0`（本机所有网卡）**：旧行为下模拟从站只能被本机访问，外部采集端/联调程序连不上。升级后从站会暴露到局域网，**若只需本机访问请显式传 IP**：`Tools.CreateTcpSlaveNetwork("127.0.0.1", 502)`。
+
+**新增**
+
+- `Tools.CreateTcpSlaveNetwork(string ip, int port, Action<Exception>? onError = null)` 重载：可指定监听的本地 IP（如 `"127.0.0.1"`、`"192.168.1.10"`），默认走 `IPAddress.Any`。
+- `Tools.CreateRtuSlaveNetwork` 串口参数化：新增 `baudRate`（默认 115200）、`dataBits`（8）、`parity`（None）、`stopBits`（One），此前四个值写死在方法体内无法调整；默认值与 0.2.0 一致，不传参行为不变。主站 `CreateRtuMaster` 仍默认 9600，主从直连请显式对齐。
+
+**工程修正**
+
+- 移除库与 Demo 工程里硬编码的 `AssemblyOriginatorKeyFile`（`D:\MyKey.snk`）——指向作者本机的强名密钥文件，在其他机器上会直接导致构建失败。
+- NuGet 包元数据修正：`Authors` / `Copyright` 中的 `Mica App` → `Mica Apps`。
+
+**兼容性**
+
+- 除上述两处破坏性变更外，0.2.1 的线上数据布局与 0.2.0 **完全一致**：字节序规则、字符串寄存器布局（`EncodeString` / `DecodeString` 固定每寄存器交换高低字节）、四类字节序下的读写往返均无任何改动，已有设备数据无需重新写入。
+
+### 0.2.0
 
 **⚠️ 破坏性变更**
 

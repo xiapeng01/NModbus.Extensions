@@ -44,7 +44,7 @@ namespace NModbus.Extensions
         }
 
         /// <summary>
-        /// 创建 Modbus TCP 从站网络：在 127.0.0.1 指定端口监听并后台异步运行。
+        /// 创建 Modbus TCP 从站网络：在本机所有网卡（0.0.0.0）的指定端口监听并后台异步运行。
         /// 创建后用 <see cref="CreateSlave"/> 扩展添加从站，再用 Write*R / Write*RW 系列方法填充数据。
         /// </summary>
         /// <param name="port">监听端口（如 502）。</param>
@@ -53,7 +53,24 @@ namespace NModbus.Extensions
         public static IModbusSlaveNetwork CreateTcpSlaveNetwork(int port, Action<Exception>? onError = null)
         {
             var fac = new ModbusFactory();
-            var listener = new TcpListener(IPAddress.Parse("127.0.0.1"), port);
+            var listener = new TcpListener(IPAddress.Any, port);
+            listener.Start();
+            var ser = fac.CreateSlaveNetwork(listener);
+            StartListening(ser, onError);
+            return ser;
+        }
+        /// <summary>
+        /// 创建 Modbus TCP 从站网络：在指定本地 IP 的指定端口监听并后台异步运行。
+        /// 创建后用 <see cref="CreateSlave"/> 扩展添加从站，再用 Write*R / Write*RW 系列方法填充数据。
+        /// </summary>
+        /// <param name="ip">监听的本地 IP 地址，如 "127.0.0.1"（仅本机可访问）或 "192.168.1.10"（仅该网卡）。</param>
+        /// <param name="port">监听端口（如 502）。</param>
+        /// <param name="onError">可选：启动/监听失败（端口被占用等）时的异常回调；不传则异常只落在后台任务上，调用方无法感知。</param>
+        /// <returns>从站网络对象。</returns>
+        public static IModbusSlaveNetwork CreateTcpSlaveNetwork(string ip,int port, Action<Exception>? onError = null)
+        {
+            var fac = new ModbusFactory();
+            var listener = new TcpListener(IPAddress.Parse(ip), port);
             listener.Start();
             var ser = fac.CreateSlaveNetwork(listener);
             StartListening(ser, onError);
@@ -61,20 +78,25 @@ namespace NModbus.Extensions
         }
 
         /// <summary>
-        /// 创建 Modbus RTU 串口从站网络（固定 115200, 8, N, 1），后台异步监听。
+        /// 创建 Modbus RTU 串口从站网络（默认 115200, 8, N, 1，可传参覆盖），后台异步监听。
+        /// 与主站直连时请将波特率等参数与 <see cref="CreateRtuMaster"/> 保持一致（后者默认 9600）。
         /// </summary>
         /// <param name="portName">串口名（如 COM1）。</param>
+        /// <param name="baudRate">波特率，默认 115200。</param>
+        /// <param name="dataBits">数据位长度。</param>
+        /// <param name="parity">校验位。</param>
+        /// <param name="stopBits">停止位。</param>
         /// <param name="onError">可选：串口打开/监听失败时的异常回调。</param>
         /// <returns>从站网络对象。</returns>
-        public static IModbusSlaveNetwork CreateRtuSlaveNetwork(string portName, Action<Exception>? onError = null)
+        public static IModbusSlaveNetwork CreateRtuSlaveNetwork(string portName,int baudRate=115200,int dataBits=8,Parity parity=Parity.None,StopBits stopBits=StopBits.One, Action<Exception>? onError = null)
         {
             // 1. 初始化并打开串口
             var sp = new SerialPort(portName)
             {
-                BaudRate = 115200,
-                Parity = Parity.None,
-                DataBits = 8,
-                StopBits = StopBits.One
+                BaudRate = baudRate,
+                Parity = parity,
+                DataBits = dataBits,
+                StopBits = stopBits
             };
             sp.Open();
 
@@ -86,7 +108,10 @@ namespace NModbus.Extensions
             // 3. 开启异步监听（异常通过 onError 回传，不再静默丢失）
             StartListening(ser, onError);
             return ser;
-        }
+        } 
+
+
+
         /// <summary>
         /// 创建 RTU over TCP 从站网络：作为 TCP 客户端连接 127.0.0.1 指定端口（通常对接串口服务器/透传网关），
         /// 在该链路上运行 RTU 从站协议，后台异步监听。
@@ -98,15 +123,14 @@ namespace NModbus.Extensions
         {
             // 1. 连接远端
             var client = new TcpClient("127.0.0.1", port);
-            var adp = new TcpClientAdapter(client);
-
+            var adp = new TcpClientAdapter(client); 
             // 2. 创建 Modbus 工厂和传输层适配器
             var fac = new ModbusFactory();
-            var ser = fac.CreateRtuSlaveNetwork(adp);
+            var network = fac.CreateRtuSlaveNetwork(adp);
 
             // 3. 开启异步监听（异常通过 onError 回传，不再静默丢失）
-            StartListening(ser, onError);
-            return ser;//从站可以前期添加,也可后期添加,也可删除
+            StartListening(network, onError);
+            return network;//从站可以前期添加,也可后期添加,也可删除
         }
 
         /// <summary>

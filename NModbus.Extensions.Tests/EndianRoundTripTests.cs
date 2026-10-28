@@ -306,7 +306,7 @@ public class EndianRoundTripTests : IDisposable
         h.Slave.WriteBoolR(0, new bool[] { true, false, true });
         Assert.Equal(new bool[] { true, false, true }, h.Master.ReadBoolR(1, 0, 3));
 
-        h.Slave.WriteStringRW(1, 20, "DEVICE-A");
+        h.Slave.WriteStringRW(20, "DEVICE-A");
         Assert.Equal("DEVICE-A", h.Master.ReadStringRW(1, 20, 8));
     }
 

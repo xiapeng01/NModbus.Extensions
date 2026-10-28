@@ -63,7 +63,7 @@ public class ValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => slave.WriteInt16R(address, (short)1));
         Assert.Throws<ArgumentOutOfRangeException>(() => slave.WriteFloatR(address, 1.5f));
         Assert.Throws<ArgumentOutOfRangeException>(() => slave.WriteBoolRW(address, true));
-        Assert.Throws<ArgumentOutOfRangeException>(() => slave.WriteStringRW(1, address, "AB"));
+        Assert.Throws<ArgumentOutOfRangeException>(() => slave.WriteStringRW(address, "AB"));
     }
 
     // ---------------- 站号越界 ----------------
@@ -167,8 +167,8 @@ public class ValidationTests
             Assert.False(mb.WriteStringRW(1, 0, null!));
         }
         var slave = NewSlave();
-        Assert.False(slave.WriteStringRW(1, 0, ""));
-        Assert.False(slave.WriteStringR(1, 0, ""));
+        Assert.False(slave.WriteStringRW(0, ""));
+        Assert.False(slave.WriteStringR(0, ""));
     }
 
     // ---------------- 合法边界值必须放行（防止过度校验） ----------------

@@ -12,15 +12,15 @@
     <SignAssembly>False</SignAssembly> 
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <PackageId>NModbus.Extensions</PackageId>
-    <Authors>xiapeng, 云母工艺(Mica App)</Authors>
+    <Authors>xiapeng, 云母工艺(Mica Apps)</Authors>
     <Description>为 NModbus 提供的扩展方法和工具库</Description>
     <PackageTags>nmodbus;modbus;extensions;serial</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Title>NModbus.Extensions</Title>
     <Company>云母工艺(Mica Apps)</Company>
-    <Copyright>Copyright (c) 2026 Mica App</Copyright>
+    <Copyright>Copyright (c) 2026 Mica Apps</Copyright>
 
     <!-- NuGet 包元数据：仓库链接（来自 git remote）与主页 -->
     <PackageProjectUrl>https://github.com/xiapeng01/NModbus.Extensions</PackageProjectUrl>
@@ -32,8 +32,7 @@
     <PackageIcon>Logo.png</PackageIcon>
 
     <!-- 许可证元数据（SPDX 表达式），消除 push 时的 License missing 警告 -->
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <AssemblyOriginatorKeyFile>D:\MyKey.snk</AssemblyOriginatorKeyFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression> 
   </PropertyGroup>
 
   <ItemGroup>
