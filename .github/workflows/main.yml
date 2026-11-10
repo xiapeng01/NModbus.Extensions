@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # GitHub OIDC：供 nuget.org Trusted Publishing 换取临时 API key（仅发布步骤使用）
 
     steps:
     - uses: actions/checkout@v4
@@ -33,7 +35,23 @@ jobs:
 
     # 仅 push 到 master 才发布；PR 只构建+测试，避免未评审代码直接发到 NuGet.org
     # （同仓库分支的 PR 也能读到 secrets，故必须显式限制事件类型）
-    # 需在github库中设置${{ secrets.NUGET_API_KEY }}
+    #
+    # 发布使用 nuget.org Trusted Publishing（OIDC 短期 key，1 小时有效，无需再维护长期 API key）。
+    # 前置配置（nuget.org 网页，一次性）：
+    #   右上角用户名 → Trusted Publishing → Add new policy：
+    #     Policy Owner: <你的 nuget.org 账号>
+    #     Repository Owner: xiapeng01    Repository: NModbus.Extensions
+    #     Workflow File: main.yml        （只填文件名，不要带 .github/workflows/ 前缀）
+    #     Environment: 留空              Package Scopes: NModbus.Extensions，勾选 Push
+    # 另需在仓库 Settings → Secrets and variables → Actions → Variables 添加：
+    #   NUGET_USER = nuget.org 用户名（profile name，不是邮箱）
+    - name: NuGet login (OIDC → temporary API key)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ vars.NUGET_USER }}
+
     - name: Publish NuGet package
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-      run: dotnet nuget push dist/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: dotnet nuget push dist/*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
