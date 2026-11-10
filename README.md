@@ -1,6 +1,6 @@
 # NModbus.Extensions 
 
-为 [NModbus](https://github.com/NModbus/NModbus) 提供的扩展方法和工具库，解决工业现场最常见的两大痛点：**字节序（字序）问题**和**多类型寄存器读写**。一行代码即可读写 `Int16 / UInt16 / Int32 / UInt32 / float / string`，默认字节序与 HslCommunication 兼容（CDAB）。
+为 [NModbus](https://github.com/NModbus/NModbus) 提供的扩展方法和工具库，解决工业现场最常见的三大痛点：**字节序（字序）问题**、**多类型寄存器读写**和**主从链路搭建**。一行代码即可读写 `Int16 / UInt16 / Int32 / UInt32 / float / string`，默认字节序与 HslCommunication 兼容（CDAB）；`Tools` 覆盖 TCP / RTU 串口 / RTU over TCP 的主从链路创建，并补齐 NModbus 缺失的**监听式 RTU over TCP 从站**（主站工具直连场景）。
 
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![frameworks](https://img.shields.io/badge/net5.0--net10.0-512BD4)](NModbus.Extensions/NModbus.Extensions.csproj)
@@ -70,6 +70,13 @@ var slave = ser.CreateSlave(1);                // 站号 1
 // 把数据"放进"设备，供主站读取
 slave.WriteFloatR(100, 3.14159f);              // 写入输入寄存器（主站只能读）
 slave.WriteInt16RW(200, new short[] { 1, 2, 3 }); // 写入保持寄存器（主站可读写）
+```
+
+如果主站工具（Modbus Poll、组态软件等）是 **TCP 客户端直连**，且线路上要求 RTU 帧（透传网关常见的接线方式），用监听式 RTU over TCP：
+
+```csharp
+var rtuServer = Tools.CreateRtuOverTcpSlaveNetwork("0.0.0.0", 502);          // 本机 502 端口监听，跑 RTU 帧
+rtuServer.CreateSlave(1).WriteUInt16RW(0, 100);                              // 主站连入后即可读到
 ```
 
 可运行的完整示例见 [NModbus.Extensions.Demo/Program.cs](NModbus.Extensions.Demo/Program.cs)。
@@ -149,12 +156,26 @@ string str = NModbusExtensions.ToString(regs);    // 已过滤末尾 \0
 | `Tools.CreateTcpSlaveNetwork(port, onError?)` | 创建 TCP 从站网络（监听 `0.0.0.0` 即本机所有网卡，后台异步运行）；0.2.1 起默认地址由 `127.0.0.1` 改为 `0.0.0.0`，从站会暴露到局域网 |
 | `Tools.CreateTcpSlaveNetwork(ip, port, onError?)` | 0.2.1 新增：创建 TCP 从站网络并指定监听 IP（如 `"127.0.0.1"` 仅本机可访问） |
 | `Tools.CreateRtuSlaveNetwork(portName, baudRate?, dataBits?, parity?, stopBits?, onError?)` | 创建 RTU 串口从站网络（0.2.1 起串口参数可传，默认 115200,8,N,1） |
-| `Tools.CreateRtuOverTcpSlaveNetwork(port, onError?)` | 创建 RTU over TCP 从站网络 |
+| `Tools.CreateRtuOverTcpSlaveNetwork(ip, port, onError?, connectTimeoutMs?)` | 创建 RTU over TCP 从站网络（**监听模式**）：在本机 `ip:port` 监听，主站工具作为 TCP 客户端直连，每条连接一条独立 RTU 链路、共享同一组从站数据 |
+| `Tools.CreateRtuOverTcpSlaveNetwork(port, onError?, connectTimeoutMs?)` | 同上，监听地址固定为 `127.0.0.1`（仅本机可访问）；`connectTimeoutMs` 为 0.2.x 兼容参数，**监听模式不再生效** |
 | `network.CreateSlave(stationNo)` | 向从站网络添加指定站号的从站 |
 | `Tools.CreateRandom(n)` | 生成 n 个随机 `double`（调试用） |
 
+**RTU over TCP 从站只有一种拓扑：本程序监听，主站工具连入。**
+
+```csharp
+var server = Tools.CreateRtuOverTcpSlaveNetwork("0.0.0.0", 502);   // 指定监听地址
+int actualPort = ((RtuOverTcpSlaveNetwork)server).Port;            // 传 0 时取系统分配的端口
+
+var loopback = Tools.CreateRtuOverTcpSlaveNetwork(502);            // 仅监听 127.0.0.1
+```
+
+`AddSlave` / `RemoveSlave` 自动同步到所有已接入链路；可同时接入多个主站。链路启用 TCP keepalive（探测拔线/掉电的死链）与 1 秒空闲读超时——主站访问**未注册站号**时 NModbus 会去读一个永远不来的响应而永久阻塞，超时能让链路自动回到监听循环（自愈），不会因一次错误请求永久哑火。
+
+> 0.2.x 的这两个同名方法原本是"作为 TCP 客户端连入透传网关"的实现（未正确实现，且不适用于从站模拟）。0.3.0 起**方法名与参数列表保持不变，实现整体替换为监听模式**，因此旧调用代码无需修改即可编译，但运行语义从"连出去"变为"本机监听"——若原端口已被别的主站/服务占用，会在创建时抛 `SocketException`。主站侧的 `CreateRtuOverTcpMaster` 不受影响。
+
 > 三个从站网络创建方法在 0.2.0 之前名为 `CreateTcpClientNetwork` / `CreateRtuClientNetwork` / `CreateRtuOverTcpClientNetwork`，因实际返回的是从站服务端、名称易误解，已统一改为 `...SlaveNetwork`，详见[变更说明](#变更说明)。
-> `onError` 为可选回调：从站启动失败（端口被占用、串口打不开等）会把异常回传给你，不传则异常只落在后台任务上，调用方无从感知——生产环境建议始终传入。
+> `onError` 为可选回调：从站启动失败（端口被占用、串口打不开等）会把异常回传给你；不传时（0.3.0 起）异常会记录到 `Console.Error` / `Trace`，不会再变成无人观察的 `UnobservedTaskException`。生产环境仍建议显式传入。
 
 ## 方法命名约定
 
@@ -175,18 +196,85 @@ string str = NModbusExtensions.ToString(regs);    // 已过滤末尾 \0
 
 ```
 NModbus.Extensions/
-├── NModbus.Extensions/           # 类库（NuGet 包本体）
-│   ├── NModbusExtensions.cs      # 字节序、类型转换、主从站读写扩展方法
-│   └── Tools.cs                  # 主站/从站网络与连接创建工具
-├── NModbus.Extensions.Demo/      # 控制台示例（TCP 主从自发自收，四种字节序往返读写）
-├── NModbus.Extensions.Tests/     # xUnit 测试：字节序往返一致性 + 参数校验回归
+├── NModbus.Extensions/                 # 类库（NuGet 包本体）
+│   ├── NModbusExtensions.cs            # 字节序、类型转换、主从站读写扩展方法
+│   ├── Tools.cs                        # 主站/从站网络与连接创建工具
+│   └── RtuOverTcpSlaveNetwork.cs       # 监听式 RTU over TCP 从站网络（NModbus 未提供）
+├── NModbus.Extensions.Demo/            # 控制台示例（TCP 主从自发自收，四种字节序往返读写）
+├── NModbus.Extensions.Tests/           # xUnit 测试：字节序往返、参数校验、RTU over TCP 两种拓扑回归
 ├── .github/workflows/main.yml    # CI：构建 + 打包 + 发布到 NuGet.org
 └── NModbus.Extensions.slnx       # 解决方案（需 .NET 9.0.2xx+ SDK 打开）
 ```
 
 ## 变更说明
 
-### 0.2.1（当前版本，2026-10）
+### 0.3.0（当前版本，2026-11）
+
+> **版本合并说明**：`0.2.2` / `0.2.3` / `0.2.4` 曾规划为三次独立发布，但**均未发布到 nuget.org**（线上最新仍为 `0.2.1`）。为避免"线上版本跳号"的困惑，这些内容全部并入本版；下文仍按原始编号保留实现细节，仅作历史记录。
+
+**⚠️ 行为不兼容（方法签名保持不变）**
+
+- 类 `RtuOverTcpListenerSlaveNetwork` → **`RtuOverTcpSlaveNetwork`**（文件名同步）；工厂方法 `CreateRtuOverTcpListenerSlaveNetwork` 并入 `CreateRtuOverTcpSlaveNetwork`。
+- **旧的 RTU over TCP 从站实现整体替换为监听模式，方法名与参数列表原样保留**：
+
+  | 方法（0.2.x 与 0.3.0 签名一致） | 0.2.x 行为 | 0.3.0 行为 |
+  |---|---|---|
+  | `CreateRtuOverTcpSlaveNetwork(int port, onError? = null, connectTimeoutMs = 3000)` | 作为 TCP 客户端连 `127.0.0.1:port` | 在 `127.0.0.1:port` **监听** |
+  | `CreateRtuOverTcpSlaveNetwork(string ip, int port, onError? = null, connectTimeoutMs = 3000)` | 作为 TCP 客户端连 `ip:port` | 在 `ip:port` **监听** |
+
+  - 旧实现（连出去）未正确实现且不适用于从站模拟，代码已删除；仅其使用的 `ConnectWithTimeout` / `EnableKeepAlive` 私有辅助方法一并移除。
+  - `connectTimeoutMs` 仅为源码兼容保留：监听模式没有"连接远端"这一步，**该参数不再生效**。
+  - 源码无需改动即可编译，但**语义反转仍属行为不兼容**：原先创建即代表"已连上网关"，现在代表"已开始监听"，端口被占用时会抛 `SocketException`。
+- 内部调整：链路读超时常量由 `Tools.SlaveLinkReadTimeoutMs` 移入 `RtuOverTcpSlaveNetwork.LinkReadTimeoutMs`。
+
+```csharp
+// 0.2.x 与 0.3.0 都能编译通过，但语义不同：
+var server = Tools.CreateRtuOverTcpSlaveNetwork(502);          // 0.3.0：本机 502 监听，主站工具连入
+var server2 = Tools.CreateRtuOverTcpSlaveNetwork("0.0.0.0", 502); // 0.3.0：监听所有网卡
+```
+
+**测试**
+
+- 监听模式用例随类/方法改名；新增两个旧签名回归用例：`Legacy_PortOnly_Overload_Listens_On_Loopback`、`Legacy_ConnectTimeout_Parameter_Is_Accepted_And_Ignored`；移除客户端模式用例 3 个，总数 75 → 74（全部通过）。
+
+### 0.2.4（未发布，内容并入 0.3.0）
+
+**缺陷修复**
+
+- **未注册站号会永久拖死链路**：主站访问一个没有注册的站号时，NModbus 在忽略该请求后会调用 `IgnoreResponse()`，RTU 实现是去读一个永远不会到来的响应，该链路从此不再响应任何请求（不报错、也不重连）。现在 RTU over TCP 链路（当时的客户端模式与监听模式）都设置了 1 秒空闲读超时：阻塞在读超时处抛 `IOException`，被 NModbus 监听循环捕获后进入下一轮，链路每秒自愈一次。对正常帧无影响（RTU 帧由主站/网关一次性写入，字节间隔为毫秒级）。
+
+**测试**
+
+- 新增 `Unknown_Slave_Request_Does_Not_Stall_Link`：先向未注册站号发请求（必须快速失败而非挂死），随后正常站号必须恢复应答。
+
+### 0.2.3（未发布，内容并入 0.3.0）
+
+**新增**
+
+- `Tools.CreateRtuOverTcpListenerSlaveNetwork(string ip, int port, Action<Exception>? onError = null)` 及公共类 `RtuOverTcpListenerSlaveNetwork`：**监听式 RTU over TCP 从站网络**。NModbus 只提供"监听 + Modbus TCP"（`CreateSlaveNetwork(TcpListener)`）和"RTU + `IStreamResource`"（`CreateRtuSlaveNetwork`）两种组合，缺少"监听 + RTU 帧"，本类补齐：本机监听、每条连接一条独立 RTU 链路、所有连接共享同一组从站数据、`AddSlave`/`RemoveSlave` 自动同步、TCP keepalive、监听异常可观测、可 `Dispose`；`Port` 属性返回实际端口（构造传 0 时由系统分配）。
+
+**缺陷修复**
+
+- **监听链路被串行化**：每条连接的 RTU 链路改为在独立线程上运行。NModbus 的 `ModbusSerialSlaveNetwork.ListenAsync` 是同步阻塞方法（内部 `Read` 阻塞到链路断开才返回），若直接在 accept 循环线程上执行，**第一条链路会把 accept 循环永久占死**，之后所有主站连接都无法接入——单主站测试完全暴露不出这个问题。
+
+**测试**
+
+- 新增 `RtuOverTcpListenerSlaveNetworkTests`：连入后 RTU 读写、接入后再加从站自动同步、多连接共享数据、端口占用抛 `SocketException`、非法 IP 抛 `ArgumentException`。
+
+### 0.2.2（未发布，内容并入 0.3.0）
+
+**缺陷修复**
+
+- `Tools.CreateRtuOverTcpSlaveNetwork(port)` 无参重载把 `"0.0.0.0"` 当作远端地址去连接（Windows 上碰巧当回环，Linux/macOS 直接抛 `SocketException`，且与注释"连接 127.0.0.1"矛盾）。现改为连接 `127.0.0.1`，并统一委托给带 IP 的重载，消除重复代码。
+- 连接阶段无超时：同步 `Connect` 在对端不可达时可阻塞 20 秒以上且不可取消。现改用 `ConnectAsync` + 超时，新增可选参数 `connectTimeoutMs`（默认 3000ms），超时抛带原因的 `TimeoutException`，失败时释放半开连接。
+- 链路半开无处理：新增 TCP keepalive（15s 空闲 / 3s 间隔 / 5 次重试），对端拔线或掉电未挥手时由内核探测后断开链路。
+- 从站启动失败静默：`StartListening` 在未传 `onError` 时不再裸 `throw`（否则任务无人观察，GC 时可能触发 `UnobservedTaskException` 终止进程），改为记录到 `Console.Error` + `Trace`。该改动作用于全部四个 `Create*SlaveNetwork`。
+
+**测试**
+
+- 新增 `RtuOverTcpSlaveNetworkTests`：无参/带 IP 两种重载的端到端读写（回归 `0.0.0.0` bug）、连接被拒绝时立即抛异常不阻塞。
+
+### 0.2.1（2026-10）
 
 **⚠️ 破坏性变更（两处，升级需改调用代码）**
 

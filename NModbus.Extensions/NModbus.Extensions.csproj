@@ -12,7 +12,7 @@
     <SignAssembly>False</SignAssembly> 
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <PackageId>NModbus.Extensions</PackageId>
     <Authors>xiapeng, 云母工艺(Mica Apps)</Authors>
     <Description>为 NModbus 提供的扩展方法和工具库</Description>

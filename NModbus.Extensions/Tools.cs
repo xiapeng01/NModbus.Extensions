@@ -2,10 +2,12 @@
 using NModbus.Serial;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NModbus.Extensions
@@ -33,13 +35,26 @@ namespace NModbus.Extensions
 
         //统一监听入口：ListenAsync 返回的 Task 必须被观察，否则端口被占用/串口打不开等
         //启动失败会静默进入 UnobservedTaskException，调用方误以为从站已就绪（修复7）。
-        //传入 onError 回调可精确感知失败；不传时保持原有异常传播行为（任务置为 Faulted），不会额外吞掉异常。
+        //传入 onError 回调可精确感知失败；不传时异常记录到 Console.Error / Trace，
+        //不会以裸 throw 方式变成 UnobservedTaskException（GC 时可能直接终止进程）。
         static void StartListening(IModbusSlaveNetwork ser, Action<Exception>? onError = null)
         {
             Task.Run(async () =>
             {
                 try { await ser.ListenAsync(); }
-                catch (Exception ex) { if (onError is null) throw; onError(ex); }
+                catch (Exception ex)
+                {
+                    if (onError is null)
+                    {
+                        var message = $"Modbus 从站网络监听异常终止：{ex}";
+                        Console.Error.WriteLine(message);
+                        Trace.TraceError(message);
+                    }
+                    else
+                    {
+                        onError(ex);
+                    }
+                }
             });
         }
 
@@ -113,25 +128,34 @@ namespace NModbus.Extensions
 
 
         /// <summary>
-        /// 创建 RTU over TCP 从站网络：作为 TCP 客户端连接 127.0.0.1 指定端口（通常对接串口服务器/透传网关），
-        /// 在该链路上运行 RTU 从站协议，后台异步监听。
+        /// 创建 RTU over TCP 从站网络：在**本机回环地址 127.0.0.1** 的指定端口监听，每个接入的连接上运行一条独立的 RTU 从站链路。
+        /// 参数列表与 0.2.x 的旧方法完全一致（源码兼容），但实现已整体替换为监听模式——
+        /// 旧实现是"作为 TCP 客户端连入透传网关"，行为有误且不适用于从站模拟，已移除。
         /// </summary>
-        /// <param name="port">远端 TCP 端口。</param>
-        /// <param name="onError">可选：连接/监听失败时的异常回调。</param>
+        /// <param name="port">监听端口。端口被占用时抛出 SocketException；传 0 由系统分配，
+        /// 实际端口用返回对象强转为 <see cref="RtuOverTcpSlaveNetwork"/> 后的 Port 属性读取。</param>
+        /// <param name="onError">可选：监听循环意外终止时的异常回调；不传时失败会记录到 Console.Error / Trace，不会静默。</param>
+        /// <param name="connectTimeoutMs">仅为兼容 0.2.x 签名保留：监听模式没有"连接远端"这一步，该参数不再生效。</param>
         /// <returns>从站网络对象；从站可以前期添加、后期添加，也可删除。</returns>
-        public static IModbusSlaveNetwork CreateRtuOverTcpSlaveNetwork(int port, Action<Exception>? onError = null)
-        {
-            // 1. 连接远端
-            var client = new TcpClient("127.0.0.1", port);
-            var adp = new TcpClientAdapter(client); 
-            // 2. 创建 Modbus 工厂和传输层适配器
-            var fac = new ModbusFactory();
-            var network = fac.CreateRtuSlaveNetwork(adp);
+        public static IModbusSlaveNetwork CreateRtuOverTcpSlaveNetwork(int port, Action<Exception>? onError = null, int connectTimeoutMs = 3000)
+            => CreateRtuOverTcpSlaveNetwork("127.0.0.1", port, onError, connectTimeoutMs);
 
-            // 3. 开启异步监听（异常通过 onError 回传，不再静默丢失）
-            StartListening(network, onError);
-            return network;//从站可以前期添加,也可后期添加,也可删除
-        }
+        /// <summary>
+        /// 创建 RTU over TCP 从站网络：在本机指定地址/端口监听 TCP 连接
+        /// （"127.0.0.1" 仅本机可访问，"0.0.0.0" 暴露到所有网卡），每个接入的连接上运行一条独立的 RTU 从站链路。
+        /// 创建后立即后台运行；主站工具（Modbus Poll 等）作为 TCP 客户端连入即可读写。
+        /// 所有连接共享同一组从站数据，AddSlave / RemoveSlave 自动同步到所有已接入的链路；
+        /// 链路启用 TCP keepalive 探测死链，并以 1 秒空闲读超时自愈"未注册站号请求导致的阻塞"。
+        /// 参数列表与 0.2.x 的旧方法完全一致（源码兼容），但实现已整体替换为监听模式。
+        /// </summary>
+        /// <param name="ip">监听绑定的本机地址。</param>
+        /// <param name="port">监听端口。端口被占用时抛出 SocketException；传 0 由系统分配，
+        /// 实际端口用返回对象强转为 <see cref="RtuOverTcpSlaveNetwork"/> 后的 Port 属性读取。</param>
+        /// <param name="onError">可选：监听循环意外终止时的异常回调；不传时失败会记录到 Console.Error / Trace，不会静默。</param>
+        /// <param name="connectTimeoutMs">仅为兼容 0.2.x 签名保留：监听模式没有"连接远端"这一步，该参数不再生效。</param>
+        /// <returns>从站网络对象；从站可以前期添加、后期添加，也可删除。</returns>
+        public static IModbusSlaveNetwork CreateRtuOverTcpSlaveNetwork(string ip, int port, Action<Exception>? onError = null, int connectTimeoutMs = 3000)
+            => new RtuOverTcpSlaveNetwork(ip, port, onError);
 
         /// <summary>
         /// 创建 Modbus TCP 主站并连接到指定设备。
@@ -139,11 +163,14 @@ namespace NModbus.Extensions
         /// </summary>
         /// <param name="ip">设备 IP 地址。</param>
         /// <param name="port">设备端口（默认 502）。</param>
+        /// <param name="timeOut">超时时间。</param>
         /// <returns>Modbus TCP 主站对象。</returns>
-        public static IModbusMaster CreateTcpMaster(string ip, int port)
+        public static IModbusMaster CreateTcpMaster(string ip, int port,int timeOut=500)
         {
             var fac = new ModbusFactory();
             var client = new TcpClient(ip, port);
+            client.ReceiveTimeout = timeOut;
+            client.SendTimeout = timeOut;
             return fac.CreateMaster(client);
         }
 
@@ -155,11 +182,14 @@ namespace NModbus.Extensions
         /// <param name="dataBits">数据位，默认 8。</param>
         /// <param name="parity">校验位，默认 <see cref="Parity.None"/>。</param>
         /// <param name="stopBits">停止位，默认 <see cref="StopBits.One"/>。</param>
+        /// <param name="timeOut">超时时间 <see cref="StopBits.One"/>。</param>
         /// <returns>Modbus RTU 主站对象。</returns>
-        public static IModbusMaster CreateRtuMaster(string portName, int baudRate = 9600, int dataBits = 8, Parity parity = Parity.None, StopBits stopBits = StopBits.One)
+        public static IModbusMaster CreateRtuMaster(string portName, int baudRate = 9600, int dataBits = 8, Parity parity = Parity.None, StopBits stopBits = StopBits.One,int timeOut=500)
         {
             var fac = new ModbusFactory();
             var sp = new SerialPort(portName, baudRate, parity, dataBits, stopBits);
+            sp.ReadTimeout = timeOut;
+            sp.WriteTimeout = timeOut;
             sp.Open();
             return fac.CreateRtuMaster(sp);
         }
@@ -169,11 +199,14 @@ namespace NModbus.Extensions
         /// </summary>
         /// <param name="ip">远端 IP 地址。</param>
         /// <param name="port">远端 TCP 端口。</param>
+        /// <param name="timeOut">超时时间。</param>
         /// <returns>Modbus RTU 主站对象。</returns>
-        public static IModbusMaster CreateRtuOverTcpMaster(string ip, int port)
+        public static IModbusMaster CreateRtuOverTcpMaster(string ip, int port,int timeOut=500)
         {
             var fac = new ModbusFactory();
             var client = new TcpClient(ip, port);
+            client.ReceiveTimeout = timeOut;
+            client.SendTimeout = timeOut;
             var adp = new TcpClientAdapter(client);
             return fac.CreateRtuMaster(adp);//此处要用Rtu
         }
